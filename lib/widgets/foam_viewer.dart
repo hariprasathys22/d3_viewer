@@ -119,7 +119,7 @@ class _FoamViewerState extends State<FoamViewer> {
                 _lastPanPosition = null;
               },
               child: Container(
-                color: Colors.white,
+                color: const Color(0xFF1E1E1E),
                 child: CustomPaint(
                   painter: FoamMeshPainter(
                     widget.foamCase.mesh,
@@ -137,97 +137,111 @@ class _FoamViewerState extends State<FoamViewer> {
               ),
             ),
           ),
-          // Representation dropdown
+          // Top-right controls
           Positioned(
-            top: 10,
-            right: 10,
+            top: 12,
+            right: 12,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 // Representation mode
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey.shade300),
+                    color: const Color(0xFF2D2D2D),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF404040)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 4,
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: DropdownButton<MeshRepresentation>(
-                    value: _representation,
-                    underline: const SizedBox(),
-                    items: const [
-                      DropdownMenuItem(
-                        value: MeshRepresentation.wireframe,
-                        child: Text('Wireframe'),
-                      ),
-                      DropdownMenuItem(
-                        value: MeshRepresentation.surface,
-                        child: Text('Surface'),
-                      ),
-                      DropdownMenuItem(
-                        value: MeshRepresentation.surfaceWithEdges,
-                        child: Text('Surface with Edges'),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.visibility, size: 14, color: Color(0xFF64B5F6)),
+                      const SizedBox(width: 8),
+                      DropdownButton<MeshRepresentation>(
+                        value: _representation,
+                        underline: const SizedBox(),
+                        dropdownColor: const Color(0xFF2D2D2D),
+                        style: const TextStyle(fontSize: 12, color: Color(0xFFE0E0E0)),
+                        icon: const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF808080)),
+                        items: const [
+                          DropdownMenuItem(
+                            value: MeshRepresentation.wireframe,
+                            child: Text('Wireframe'),
+                          ),
+                          DropdownMenuItem(
+                            value: MeshRepresentation.surface,
+                            child: Text('Surface'),
+                          ),
+                          DropdownMenuItem(
+                            value: MeshRepresentation.surfaceWithEdges,
+                            child: Text('Surface + Edges'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() {
+                              _representation = value;
+                            });
+                          }
+                        },
                       ),
                     ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setState(() {
-                          _representation = value;
-                        });
-                      }
-                    },
                   ),
                 ),
                 // Data mode dropdown (only show when field data is loaded)
                 if (widget.fieldData != null) ...[
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: const Color(0xFF2D2D2D),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: const Color(0xFF404040)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 4,
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                    child: DropdownButton<DataMode>(
-                      value: _dataMode,
-                      underline: const SizedBox(),
-                      items: const [
-                        DropdownMenuItem(
-                          value: DataMode.cellData,
-                          child: Text('Cell Data'),
-                        ),
-                        DropdownMenuItem(
-                          value: DataMode.pointData,
-                          child: Text('Point Data'),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.gradient, size: 14, color: Color(0xFF64B5F6)),
+                        const SizedBox(width: 8),
+                        DropdownButton<DataMode>(
+                          value: _dataMode,
+                          underline: const SizedBox(),
+                          dropdownColor: const Color(0xFF2D2D2D),
+                          style: const TextStyle(fontSize: 12, color: Color(0xFFE0E0E0)),
+                          icon: const Icon(Icons.arrow_drop_down, size: 18, color: Color(0xFF808080)),
+                          items: const [
+                            DropdownMenuItem(
+                              value: DataMode.cellData,
+                              child: Text('Cell Data'),
+                            ),
+                            DropdownMenuItem(
+                              value: DataMode.pointData,
+                              child: Text('Point Data'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value != null) {
+                              setState(() {
+                                _dataMode = value;
+                              });
+                            }
+                          },
                         ),
                       ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() {
-                            _dataMode = value;
-                          });
-                        }
-                      },
                     ),
                   ),
                 ],
@@ -237,26 +251,26 @@ class _FoamViewerState extends State<FoamViewer> {
           // Color legend (only show when field data is loaded)
           if (widget.fieldData != null)
             Positioned(
-              bottom: 20,
-              right: 20,
+              bottom: 16,
+              right: 16,
               child: _ColorLegend(fieldData: widget.fieldData!),
             ),
           // View preset buttons on the right side
           Positioned(
-            right: 10,
+            right: 12,
             top: 0,
             bottom: 0,
             child: Center(
               child: Container(
-                padding: const EdgeInsets.all(4),
+                padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
+                  color: const Color(0xFF2D2D2D),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: const Color(0xFF404040)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 4,
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
@@ -274,7 +288,7 @@ class _FoamViewerState extends State<FoamViewer> {
                       tooltip: 'Bottom View',
                       onPressed: _setBottomView,
                     ),
-                    const Divider(height: 8),
+                    const Divider(height: 12, thickness: 1, color: Color(0xFF404040)),
                     _ViewButton(
                       icon: Icons.arrow_forward,
                       tooltip: 'Front View',
@@ -285,7 +299,7 @@ class _FoamViewerState extends State<FoamViewer> {
                       tooltip: 'Back View',
                       onPressed: _setBackView,
                     ),
-                    const Divider(height: 8),
+                    const Divider(height: 12, thickness: 1, color: Color(0xFF404040)),
                     _ViewButton(
                       icon: Icons.arrow_right_alt,
                       tooltip: 'Right View',
@@ -296,7 +310,7 @@ class _FoamViewerState extends State<FoamViewer> {
                       tooltip: 'Left View',
                       onPressed: _setLeftView,
                     ),
-                    const Divider(height: 8),
+                    const Divider(height: 12, thickness: 1, color: Color(0xFF404040)),
                     _ViewButton(
                       icon: Icons.threed_rotation,
                       tooltip: 'Isometric View',
@@ -840,15 +854,15 @@ class _ColorLegend extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFF2D2D2D),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: const Color(0xFF404040)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -857,36 +871,46 @@ class _ColorLegend extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            fieldType,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+          Row(
+            children: [
+              const Icon(Icons.gradient, size: 14, color: Color(0xFF64B5F6)),
+              const SizedBox(width: 8),
+              Text(
+                fieldType,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                  color: Color(0xFFE0E0E0),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           // Color bar
           Container(
             width: 200,
             height: 20,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.grey.shade400),
+              border: Border.all(color: const Color(0xFF404040)),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(3),
               child: CustomPaint(painter: _ColorBarPainter()),
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           // Min/Max labels
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 ColorMap.formatValue(minValue),
-                style: const TextStyle(fontSize: 10),
+                style: const TextStyle(fontSize: 10, color: Color(0xFFB0B0B0)),
               ),
               Text(
                 ColorMap.formatValue(maxValue),
-                style: const TextStyle(fontSize: 10),
+                style: const TextStyle(fontSize: 10, color: Color(0xFFB0B0B0)),
               ),
             ],
           ),
@@ -935,15 +959,24 @@ class _ViewButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
+      textStyle: const TextStyle(fontSize: 11, color: Colors.white),
+      decoration: BoxDecoration(
+        color: const Color(0xFF404040),
+        borderRadius: BorderRadius.circular(4),
+      ),
       child: IconButton(
-        icon: Icon(icon, size: 20),
+        icon: Icon(icon, size: 18, color: const Color(0xFFB0B0B0)),
         onPressed: onPressed,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(
-          minWidth: 32,
-          minHeight: 32,
+          minWidth: 36,
+          minHeight: 36,
         ),
         visualDensity: VisualDensity.compact,
+        style: IconButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          hoverColor: const Color(0xFF404040),
+        ),
       ),
     );
   }
