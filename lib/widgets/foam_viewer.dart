@@ -34,7 +34,7 @@ class _FoamViewerState extends State<FoamViewer> {
   double _rotationY = 0.3;
   double _zoom = 500.0; // Increased default zoom
   Offset? _lastPanPosition;
-  MeshRepresentation _representation = MeshRepresentation.surfaceWithEdges;
+  MeshRepresentation _representation = MeshRepresentation.surface;
   DataMode _dataMode = DataMode.pointData;
 
   @override

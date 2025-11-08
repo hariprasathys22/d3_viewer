@@ -419,98 +419,101 @@ class _OpenFOAMViewerPageState extends State<OpenFOAMViewerPage> {
 
     if (_foamCase == null) {
       // Welcome screen
-      return Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 700),
-          padding: const EdgeInsets.all(48),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF2196F3).withOpacity(0.2),
-                      const Color(0xFF64B5F6).withOpacity(0.1),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(
-                  Icons.view_in_ar,
-                  size: 80,
-                  color: Color(0xFF64B5F6),
-                ),
-              ),
-              const SizedBox(height: 32),
-              const Text(
-                'OpenFOAM 3D Viewer',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Professional CFD mesh visualization and analysis',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Color(0xFF808080),
-                ),
-              ),
-              const SizedBox(height: 48),
-              ElevatedButton.icon(
-                onPressed: _pickCaseFolder,
-                icon: const Icon(Icons.folder_open, size: 24),
-                label: const Text('Open OpenFOAM Case', style: TextStyle(fontSize: 16)),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
-                  backgroundColor: const Color(0xFF2196F3),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 64),
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D2D2D),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF404040)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 20),
-                        SizedBox(width: 12),
-                        Text(
-                          'Features',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
-                        ),
+      return SingleChildScrollView(
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 700),
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF2196F3).withOpacity(0.2),
+                        const Color(0xFF64B5F6).withOpacity(0.1),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                    _buildFeatureItem(Icons.compress, 'ASCII & gzip compressed files (.gz)'),
-                    _buildFeatureItem(Icons.grid_on, 'PolyMesh visualization'),
-                    _buildFeatureItem(Icons.gradient, 'Scalar field data'),
-                    _buildFeatureItem(Icons.access_time, 'Multiple time steps'),
-                    _buildFeatureItem(Icons.speed, 'GPU-accelerated rendering'),
-                    _buildFeatureItem(Icons.threed_rotation, 'Preset camera views'),
-                  ],
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(
+                    Icons.view_in_ar,
+                    size: 80,
+                    color: Color(0xFF64B5F6),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 32),
+                const Text(
+                  'OpenFOAM 3D Viewer',
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Professional CFD mesh visualization and analysis',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF808080),
+                  ),
+                ),
+                const SizedBox(height: 48),
+                ElevatedButton.icon(
+                  onPressed: _pickCaseFolder,
+                  icon: const Icon(Icons.folder_open, size: 24),
+                  label: const Text('Open OpenFOAM Case', style: TextStyle(fontSize: 16)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                    backgroundColor: const Color(0xFF2196F3),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 64),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2D2D2D),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF404040)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Color(0xFF4CAF50), size: 20),
+                          SizedBox(width: 12),
+                          Text(
+                            'Features',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      _buildFeatureItem(Icons.compress, 'ASCII & gzip compressed files (.gz)'),
+                      _buildFeatureItem(Icons.grid_on, 'PolyMesh visualization'),
+                      _buildFeatureItem(Icons.gradient, 'Scalar field data'),
+                      _buildFeatureItem(Icons.access_time, 'Multiple time steps'),
+                      _buildFeatureItem(Icons.speed, 'GPU-accelerated rendering'),
+                      _buildFeatureItem(Icons.threed_rotation, 'Preset camera views'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32), // Add bottom padding
+              ],
+            ),
           ),
         ),
       );
