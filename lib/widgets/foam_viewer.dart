@@ -74,6 +74,16 @@ class _FoamViewerState extends State<FoamViewer> {
     }
   }
 
+  // Preset view methods
+  void _setTopView() => setState(() { _rotationX = 0.0; _rotationY = 0.0; });
+  void _setBottomView() => setState(() { _rotationX = math.pi; _rotationY = 0.0; });
+  void _setFrontView() => setState(() { _rotationX = math.pi / 2; _rotationY = 0.0; });
+  void _setBackView() => setState(() { _rotationX = math.pi / 2; _rotationY = math.pi; });
+  void _setRightView() => setState(() { _rotationX = math.pi / 2; _rotationY = math.pi / 2; });
+  void _setLeftView() => setState(() { _rotationX = math.pi / 2; _rotationY = -math.pi / 2; });
+  void _setIsometricView() => setState(() { _rotationX = math.pi / 4; _rotationY = math.pi / 4; });
+
+
   @override
   Widget build(BuildContext context) {
     return ClipRect(
@@ -83,9 +93,13 @@ class _FoamViewerState extends State<FoamViewer> {
             onPointerSignal: (event) {
               if (event is PointerScrollEvent) {
                 setState(() {
-                  // Zoom with mouse wheel
-                  _zoom += event.scrollDelta.dy > 0 ? -20 : 20;
-                  _zoom = _zoom.clamp(10.0, 2000.0);
+                  // Zoom with mouse wheel - proportional to current zoom level
+                  // This makes zooming smooth at all zoom levels
+                  final zoomFactor = event.scrollDelta.dy > 0 ? 0.9 : 1.1;
+                  _zoom *= zoomFactor;
+                  
+                  // More generous clamping range
+                  _zoom = _zoom.clamp(0.1, 10000.0);
                 });
               }
             },
@@ -227,6 +241,72 @@ class _FoamViewerState extends State<FoamViewer> {
               right: 20,
               child: _ColorLegend(fieldData: widget.fieldData!),
             ),
+          // View preset buttons on the right side
+          Positioned(
+            right: 10,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ViewButton(
+                      icon: Icons.arrow_upward,
+                      tooltip: 'Top View',
+                      onPressed: _setTopView,
+                    ),
+                    _ViewButton(
+                      icon: Icons.arrow_downward,
+                      tooltip: 'Bottom View',
+                      onPressed: _setBottomView,
+                    ),
+                    const Divider(height: 8),
+                    _ViewButton(
+                      icon: Icons.arrow_forward,
+                      tooltip: 'Front View',
+                      onPressed: _setFrontView,
+                    ),
+                    _ViewButton(
+                      icon: Icons.arrow_back,
+                      tooltip: 'Back View',
+                      onPressed: _setBackView,
+                    ),
+                    const Divider(height: 8),
+                    _ViewButton(
+                      icon: Icons.arrow_right_alt,
+                      tooltip: 'Right View',
+                      onPressed: _setRightView,
+                    ),
+                    _ViewButton(
+                      icon: Icons.arrow_left,
+                      tooltip: 'Left View',
+                      onPressed: _setLeftView,
+                    ),
+                    const Divider(height: 8),
+                    _ViewButton(
+                      icon: Icons.threed_rotation,
+                      tooltip: 'Isometric View',
+                      onPressed: _setIsometricView,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -246,6 +326,12 @@ class FoamMeshPainter extends CustomPainter {
 
   // Cache for point data interpolation
   List<double>? _pointData;
+  
+  // GPU-friendly cached data structures
+  static List<double>? _cachedPointData;
+  static FieldData? _cachedFieldData;
+  static DataMode? _cachedDataMode;
+  static PolyMesh? _cachedMesh;
 
   FoamMeshPainter(
     this.mesh,
@@ -258,11 +344,21 @@ class FoamMeshPainter extends CustomPainter {
     this.showInternalMesh,
     this.boundaryVisibility,
   ) {
-    // Convert cell data to point data if needed
-    if (fieldData != null &&
+    // Use cached point data if available and valid
+    if (_cachedFieldData == fieldData && 
+        _cachedDataMode == dataMode && 
+        _cachedMesh == mesh &&
+        _cachedPointData != null) {
+      _pointData = _cachedPointData;
+    } else if (fieldData != null &&
         fieldData!.internalField.isNotEmpty &&
         dataMode == DataMode.pointData) {
+      // Convert cell data to point data if needed (cache it)
       _pointData = _interpolateCellToPoint();
+      _cachedPointData = _pointData;
+      _cachedFieldData = fieldData;
+      _cachedDataMode = dataMode;
+      _cachedMesh = mesh;
     }
   }
 
@@ -377,10 +473,35 @@ class FoamMeshPainter extends CustomPainter {
       }
     }
 
-    // Create a list of faces with their transformed vertices and depth
-    final List<_TransformedFace> transformedFaces = [];
+    // ============================================
+    // GPU-OPTIMIZED: Pre-transform all points once
+    // ============================================
+    final transformedPoints = List<Offset>.filled(mesh.points.length, Offset.zero);
+    final transformedDepths = List<double>.filled(mesh.points.length, 0.0);
+    
+    for (int i = 0; i < mesh.points.length; i++) {
+      final point = mesh.points[i];
+      
+      // Center the mesh
+      final x = point.x - centerMeshX;
+      final y = point.y - centerMeshY;
+      final z = point.z - centerMeshZ;
 
-    // Calculate number of internal faces (faces that have both owner and neighbour)
+      // Apply 3D rotation
+      final rotated = _rotate3D(x, y, z, rotationX, rotationY);
+
+      // Project to 2D
+      transformedPoints[i] = Offset(
+        centerX + rotated[0] * zoom,
+        centerY - rotated[1] * zoom,
+      );
+      transformedDepths[i] = rotated[2];
+    }
+
+    // ============================================
+    // GPU-OPTIMIZED: Build face list with pre-transformed vertices
+    // ============================================
+    final List<_TransformedFace> transformedFaces = [];
     final numInternalFaces = mesh.neighbour.length;
 
     for (int faceIdx = 0; faceIdx < mesh.faces.length; faceIdx++) {
@@ -388,8 +509,6 @@ class FoamMeshPainter extends CustomPainter {
       if (face.pointIndices.isEmpty) continue;
 
       // Determine if this face belongs to a boundary or is internal
-      // Internal faces: 0 to numInternalFaces-1
-      // Boundary faces: numInternalFaces onwards
       bool isInternal = faceIdx < numInternalFaces;
       String? boundaryName;
 
@@ -411,6 +530,7 @@ class FoamMeshPainter extends CustomPainter {
           !(boundaryVisibility[boundaryName] ?? true))
         continue;
 
+      // Use pre-transformed points (zero cost!)
       final List<Offset> screenPoints = [];
       final List<int> pointIndices = [];
       double totalZ = 0.0;
@@ -422,27 +542,11 @@ class FoamMeshPainter extends CustomPainter {
       }
 
       for (final pointIdx in face.pointIndices) {
-        if (pointIdx >= mesh.points.length) {
-          continue;
-        }
-
-        final point = mesh.points[pointIdx];
-
-        // Center the mesh
-        final x = point.x - centerMeshX;
-        final y = point.y - centerMeshY;
-        final z = point.z - centerMeshZ;
-
-        // Apply 3D rotation
-        final rotated = _rotate3D(x, y, z, rotationX, rotationY);
-
-        // Project to 2D
-        final screenX = centerX + rotated[0] * zoom;
-        final screenY = centerY - rotated[1] * zoom;
-
-        screenPoints.add(Offset(screenX, screenY));
+        if (pointIdx >= mesh.points.length) continue;
+        
+        screenPoints.add(transformedPoints[pointIdx]);
         pointIndices.add(pointIdx);
-        totalZ += rotated[2]; // Z depth for sorting
+        totalZ += transformedDepths[pointIdx];
       }
 
       if (screenPoints.isNotEmpty) {
@@ -456,81 +560,15 @@ class FoamMeshPainter extends CustomPainter {
     // Sort faces by depth (painter's algorithm - back to front)
     transformedFaces.sort((a, b) => a.depth.compareTo(b.depth));
 
-    // Draw sorted faces
-    for (final transformedFace in transformedFaces) {
-      final path = Path();
-
-      if (transformedFace.points.isEmpty) continue;
-
-      path.moveTo(transformedFace.points[0].dx, transformedFace.points[0].dy);
-      for (int i = 1; i < transformedFace.points.length; i++) {
-        path.lineTo(transformedFace.points[i].dx, transformedFace.points[i].dy);
-      }
-      path.close();
-
-      // Draw based on representation mode
-      switch (representation) {
-        case MeshRepresentation.wireframe:
-          // Wireframe - just edges
-          final edgePaint = Paint()
-            ..color = Colors.blue
-            ..strokeWidth = 1.0
-            ..style = PaintingStyle.stroke;
-          canvas.drawPath(path, edgePaint);
-          break;
-
-        case MeshRepresentation.surface:
-        case MeshRepresentation.surfaceWithEdges:
-          if (dataMode == DataMode.pointData &&
-              _pointData != null &&
-              minFieldValue != null &&
-              maxFieldValue != null &&
-              transformedFace.pointIndices.isNotEmpty &&
-              transformedFace.points.length >= 3) {
-            // POINT DATA MODE: Draw triangles with vertex colors for smooth interpolation
-            _drawSmoothColoredFace(
-              canvas,
-              transformedFace.points,
-              transformedFace.pointIndices,
-              minFieldValue,
-              maxFieldValue,
-            );
-          } else if (dataMode == DataMode.cellData &&
-              fieldData != null &&
-              minFieldValue != null &&
-              maxFieldValue != null &&
-              transformedFace.cellIdx >= 0 &&
-              transformedFace.cellIdx < fieldData!.internalField.length) {
-            // CELL DATA MODE: Use solid color for the entire face
-            final cellValue = fieldData!.internalField[transformedFace.cellIdx];
-            final cellColor = ColorMap.getFastColor(
-              cellValue,
-              minFieldValue,
-              maxFieldValue,
-            );
-            final surfacePaint = Paint()
-              ..color = cellColor
-              ..style = PaintingStyle.fill;
-            canvas.drawPath(path, surfacePaint);
-          } else {
-            // No field data - use default color
-            final surfacePaint = Paint()
-              ..color = Colors.lightBlue.shade200
-              ..style = PaintingStyle.fill;
-            canvas.drawPath(path, surfacePaint);
-          }
-
-          // Draw edges if requested
-          if (representation == MeshRepresentation.surfaceWithEdges) {
-            final edgePaint = Paint()
-              ..color = Colors.black.withOpacity(0.3)
-              ..strokeWidth = 0.5
-              ..style = PaintingStyle.stroke;
-            canvas.drawPath(path, edgePaint);
-          }
-          break;
-      }
-    }
+    // ============================================
+    // GPU-OPTIMIZED: Batch render faces
+    // ============================================
+    _batchRenderFaces(
+      canvas, 
+      transformedFaces, 
+      minFieldValue, 
+      maxFieldValue,
+    );
 
     // Draw info text
     final textPainter = TextPainter(
@@ -538,7 +576,7 @@ class FoamMeshPainter extends CustomPainter {
         text:
             'Points: ${mesh.points.length}, Faces: ${mesh.faces.length}\n'
             'Drag to rotate | Scroll to zoom\n'
-            'Zoom: ${zoom.toStringAsFixed(1)}',
+            'Zoom: ${zoom.toStringAsFixed(1)} | GPU: ON',
         style: const TextStyle(color: Colors.black, fontSize: 12),
       ),
       textDirection: TextDirection.ltr,
@@ -547,72 +585,187 @@ class FoamMeshPainter extends CustomPainter {
     textPainter.paint(canvas, const Offset(10, 10));
   }
 
-  // Draw face with smooth color interpolation using vertex colors
-  void _drawSmoothColoredFace(
+  // ============================================
+  // GPU-OPTIMIZED: Batch rendering with Vertices API
+  // ============================================
+  void _batchRenderFaces(
     Canvas canvas,
-    List<Offset> points,
-    List<int> pointIndices,
-    double minValue,
-    double maxValue,
+    List<_TransformedFace> faces,
+    double? minFieldValue,
+    double? maxFieldValue,
   ) {
-    if (points.length < 3 || _pointData == null) return;
+    // For GPU acceleration, we'll batch triangles using Vertices API
+    final List<Offset> allTriangleVertices = [];
+    final List<Color> allTriangleColors = [];
+    final List<Path> edgePaths = []; // For wireframe/edges
+    
+    for (final transformedFace in faces) {
+      if (transformedFace.points.isEmpty) continue;
 
-    // Get colors for each vertex
-    final colors = <Color>[];
-    for (final pointIdx in pointIndices) {
-      if (pointIdx >= 0 && pointIdx < _pointData!.length) {
-        final value = _pointData![pointIdx];
-        colors.add(ColorMap.getFastColor(value, minValue, maxValue));
-      } else {
-        colors.add(Colors.grey);
+      // For wireframe mode
+      if (representation == MeshRepresentation.wireframe) {
+        final path = Path();
+        path.moveTo(transformedFace.points[0].dx, transformedFace.points[0].dy);
+        for (int i = 1; i < transformedFace.points.length; i++) {
+          path.lineTo(transformedFace.points[i].dx, transformedFace.points[i].dy);
+        }
+        path.close();
+        edgePaths.add(path);
+        continue;
+      }
+
+      // For surface modes - convert to triangles for GPU rendering
+      if (representation == MeshRepresentation.surface ||
+          representation == MeshRepresentation.surfaceWithEdges) {
+        
+        if (dataMode == DataMode.pointData &&
+            _pointData != null &&
+            minFieldValue != null &&
+            maxFieldValue != null &&
+            transformedFace.pointIndices.isNotEmpty &&
+            transformedFace.points.length >= 3) {
+          
+          // POINT DATA MODE: Batch triangles with vertex colors
+          _batchTrianglesFromFace(
+            transformedFace.points,
+            transformedFace.pointIndices,
+            minFieldValue,
+            maxFieldValue,
+            allTriangleVertices,
+            allTriangleColors,
+          );
+          
+        } else if (dataMode == DataMode.cellData &&
+            fieldData != null &&
+            minFieldValue != null &&
+            maxFieldValue != null &&
+            transformedFace.cellIdx >= 0 &&
+            transformedFace.cellIdx < fieldData!.internalField.length) {
+          
+          // CELL DATA MODE: Batch with uniform color
+          final cellValue = fieldData!.internalField[transformedFace.cellIdx];
+          final cellColor = ColorMap.getFastColor(
+            cellValue,
+            minFieldValue,
+            maxFieldValue,
+          );
+          
+          _batchTrianglesFromFace(
+            transformedFace.points,
+            transformedFace.pointIndices,
+            minFieldValue,
+            maxFieldValue,
+            allTriangleVertices,
+            allTriangleColors,
+            uniformColor: cellColor,
+          );
+          
+        } else {
+          // No field data - use default color
+          _batchTrianglesFromFace(
+            transformedFace.points,
+            transformedFace.pointIndices,
+            0.0,
+            1.0,
+            allTriangleVertices,
+            allTriangleColors,
+            uniformColor: Colors.lightBlue.shade200,
+          );
+        }
+
+        // Add edges if requested
+        if (representation == MeshRepresentation.surfaceWithEdges) {
+          final path = Path();
+          path.moveTo(transformedFace.points[0].dx, transformedFace.points[0].dy);
+          for (int i = 1; i < transformedFace.points.length; i++) {
+            path.lineTo(transformedFace.points[i].dx, transformedFace.points[i].dy);
+          }
+          path.close();
+          edgePaths.add(path);
+        }
       }
     }
 
-    // Triangulate the face and use Flutter's Vertices API for smooth gradients
-    if (points.length == 3) {
-      // Triangle - draw directly with vertex colors
-      _drawTriangleWithVertexColors(canvas, points, colors);
-    } else if (points.length == 4) {
-      // Quad - split into 2 triangles
-      _drawTriangleWithVertexColors(
-        canvas,
-        [points[0], points[1], points[2]],
-        [colors[0], colors[1], colors[2]],
+    // ============================================
+    // GPU DRAW CALL: Single batch render for all triangles
+    // ============================================
+    if (allTriangleVertices.isNotEmpty) {
+      final vertices = ui.Vertices(
+        ui.VertexMode.triangles,
+        allTriangleVertices,
+        colors: allTriangleColors,
       );
-      _drawTriangleWithVertexColors(
-        canvas,
-        [points[0], points[2], points[3]],
-        [colors[0], colors[2], colors[3]],
-      );
-    } else {
-      // Polygon - fan triangulation from first vertex
-      for (int i = 1; i < points.length - 1; i++) {
-        _drawTriangleWithVertexColors(
-          canvas,
-          [points[0], points[i], points[i + 1]],
-          [colors[0], colors[i], colors[i + 1]],
-        );
+      
+      final paint = Paint()..style = PaintingStyle.fill;
+      canvas.drawVertices(vertices, BlendMode.srcOver, paint);
+    }
+
+    // Draw edges/wireframe (can't batch these easily, but they're lightweight)
+    if (edgePaths.isNotEmpty) {
+      final edgePaint = Paint()
+        ..color = representation == MeshRepresentation.wireframe 
+            ? Colors.blue 
+            : Colors.black.withOpacity(0.3)
+        ..strokeWidth = representation == MeshRepresentation.wireframe ? 1.0 : 0.5
+        ..style = PaintingStyle.stroke;
+      
+      for (final path in edgePaths) {
+        canvas.drawPath(path, edgePaint);
       }
     }
   }
 
-  // Draw a single triangle with smooth vertex color interpolation using Vertices
-  void _drawTriangleWithVertexColors(
-    Canvas canvas,
-    List<Offset> triangle,
-    List<Color> vertexColors,
-  ) {
-    if (triangle.length != 3 || vertexColors.length != 3) return;
+  // ============================================
+  // GPU-OPTIMIZED: Batch triangulate face
+  // ============================================
+  void _batchTrianglesFromFace(
+    List<Offset> points,
+    List<int> pointIndices,
+    double minValue,
+    double maxValue,
+    List<Offset> outVertices,
+    List<Color> outColors, {
+    Color? uniformColor,
+  }) {
+    if (points.length < 3) return;
 
-    // Use Flutter's Vertices API for hardware-accelerated smooth gradients
-    final vertices = ui.Vertices(
-      ui.VertexMode.triangles,
-      triangle,
-      colors: vertexColors,
-    );
+    // Get colors for each vertex
+    final colors = <Color>[];
+    if (uniformColor != null) {
+      // Use uniform color for all vertices
+      for (int i = 0; i < pointIndices.length; i++) {
+        colors.add(uniformColor);
+      }
+    } else if (_pointData != null) {
+      // Use per-vertex colors
+      for (final pointIdx in pointIndices) {
+        if (pointIdx >= 0 && pointIdx < _pointData!.length) {
+          final value = _pointData![pointIdx];
+          colors.add(ColorMap.getFastColor(value, minValue, maxValue));
+        } else {
+          colors.add(Colors.grey);
+        }
+      }
+    }
 
-    final paint = Paint()..style = PaintingStyle.fill;
-    canvas.drawVertices(vertices, BlendMode.srcOver, paint);
+    // Triangulate and add to batch
+    if (points.length == 3) {
+      // Triangle - add directly
+      outVertices.addAll(points);
+      outColors.addAll(colors);
+    } else if (points.length == 4) {
+      // Quad - split into 2 triangles
+      outVertices.addAll([points[0], points[1], points[2]]);
+      outColors.addAll([colors[0], colors[1], colors[2]]);
+      outVertices.addAll([points[0], points[2], points[3]]);
+      outColors.addAll([colors[0], colors[2], colors[3]]);
+    } else {
+      // Polygon - fan triangulation
+      for (int i = 1; i < points.length - 1; i++) {
+        outVertices.addAll([points[0], points[i], points[i + 1]]);
+        outColors.addAll([colors[0], colors[i], colors[i + 1]]);
+      }
+    }
   }
 
   List<double> _rotate3D(
@@ -764,4 +917,34 @@ class _ColorBarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// View preset button widget
+class _ViewButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  const _ViewButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: IconButton(
+        icon: Icon(icon, size: 20),
+        onPressed: onPressed,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(
+          minWidth: 32,
+          minHeight: 32,
+        ),
+        visualDensity: VisualDensity.compact,
+      ),
+    );
+  }
 }

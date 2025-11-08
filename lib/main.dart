@@ -1,6 +1,7 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'readers/case_reader.dart';
 import 'models/openfoam_case.dart';
 import 'widgets/foam_viewer.dart';
@@ -35,13 +36,14 @@ class OpenFOAMViewerPage extends StatefulWidget {
 
 class _OpenFOAMViewerPageState extends State<OpenFOAMViewerPage> {
   OpenFOAMCase? _foamCase;
-  bool _isLoading = true;
+  bool _isLoading = false;
   String? _error;
   Map<String, String> _fileFormats = {};
   String? _selectedTimeStep;
   String? _selectedField;
   List<String> _availableFields = [];
   FieldData? _currentFieldData;
+  String? _casePath;
 
   // Visibility controls
   bool _showInternalMesh = true;
@@ -50,10 +52,21 @@ class _OpenFOAMViewerPageState extends State<OpenFOAMViewerPage> {
   @override
   void initState() {
     super.initState();
-    _loadCase();
+    // Don't auto-load, wait for user to pick folder
+  }
+
+  Future<void> _pickCaseFolder() async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
+    if (selectedDirectory != null) {
+      _casePath = selectedDirectory;
+      await _loadCase();
+    }
   }
 
   Future<void> _loadCase() async {
+    if (_casePath == null) return;
+
     try {
       setState(() {
         _isLoading = true;
@@ -61,14 +74,12 @@ class _OpenFOAMViewerPageState extends State<OpenFOAMViewerPage> {
       });
 
       // Get file formats first
-      final formats = await CaseReader.getFileFormats(
-        'D:/programs/openfoam_reader/motorBik',
-      );
+      final formats = await CaseReader.getFileFormats(_casePath!);
 
-      // Read the .foam file
-      final foamCase = await CaseReader.readCase(
-        'D:/programs/openfoam_reader/motorBik/para.foam',
-      );
+      // Try to find .foam file or use case path directly
+      String foamFilePath = '$_casePath/para.foam';
+      // Read the case
+      final foamCase = await CaseReader.readCase(foamFilePath);
 
       print('=== OpenFOAM Case Loaded ===');
       print('Case path: ${foamCase.casePath}');
@@ -182,6 +193,14 @@ class _OpenFOAMViewerPageState extends State<OpenFOAMViewerPage> {
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         title: const Text('OpenFOAM PolyMesh Viewer'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.folder_open),
+            tooltip: 'Open OpenFOAM Case',
+            onPressed: _pickCaseFolder,
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: _buildBody(),
     );
@@ -267,7 +286,11 @@ class _OpenFOAMViewerPageState extends State<OpenFOAMViewerPage> {
                 ),
               ],
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _loadCase, child: const Text('Retry')),
+              ElevatedButton.icon(
+                onPressed: _pickCaseFolder,
+                icon: const Icon(Icons.folder_open),
+                label: const Text('Open Another Case'),
+              ),
             ],
           ),
         ),
@@ -275,7 +298,80 @@ class _OpenFOAMViewerPageState extends State<OpenFOAMViewerPage> {
     }
 
     if (_foamCase == null) {
-      return const Center(child: Text('No case loaded'));
+      // Welcome screen
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.folder_open,
+              size: 100,
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Welcome to OpenFOAM Viewer',
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Click the folder icon above or the button below\nto select an OpenFOAM case directory',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: _pickCaseFolder,
+              icon: const Icon(Icons.folder_open),
+              label: const Text('Open OpenFOAM Case'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
+              ),
+            ),
+            const SizedBox(height: 48),
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.symmetric(horizontal: 32),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.blue.shade700),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Supported Features:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade900,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '• ASCII and gzip compressed (.gz) mesh files\n'
+                    '• PolyMesh visualization (points, faces, boundaries)\n'
+                    '• Scalar field data visualization\n'
+                    '• Multiple time steps support\n'
+                    '• GPU-accelerated rendering\n'
+                    '• Preset camera views (top, front, isometric, etc.)',
+                    style: TextStyle(fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     return Row(
@@ -305,6 +401,38 @@ class _OpenFOAMViewerPageState extends State<OpenFOAMViewerPage> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // Case Path
+        const Text(
+          'Case Directory',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.folder, size: 16, color: Colors.blue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _casePath ?? _foamCase!.casePath,
+                  style: const TextStyle(fontSize: 11),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Divider(),
+        const SizedBox(height: 16),
+
         // Time Step Dropdown
         const Text(
           'Time Step',

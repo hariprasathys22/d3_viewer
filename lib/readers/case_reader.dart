@@ -1,10 +1,10 @@
 // lib/readers/case_reader.dart
 
 import 'dart:io';
-import 'dart:convert';
 import '../models/openfoam_case.dart';
 import '../parsers/foam_file_parser.dart';
 import '../utils/field_interpolation.dart';
+import '../utils/file_utils.dart';
 import 'mesh_reader.dart';
 
 class CaseReader {
@@ -12,11 +12,11 @@ class CaseReader {
   static Future<Map<String, String>> getFileFormats(String casePath) async {
     final formats = <String, String>{};
 
-    // Check controlDict
+    // Check controlDict (supports .gz)
     try {
-      final controlDictFile = File('$casePath/system/controlDict');
-      if (await controlDictFile.exists()) {
-        final content = await controlDictFile.readAsString();
+      final controlDictPath = '$casePath/system/controlDict';
+      if (await FileUtils.fileExists(controlDictPath)) {
+        final content = await FileUtils.readFileAsString(controlDictPath);
         final header = FoamFileParser.parseFoamFileHeader(content);
         formats['controlDict'] = header['format'] ?? 'unknown';
       }
@@ -24,11 +24,11 @@ class CaseReader {
       formats['controlDict'] = 'error';
     }
 
-    // Check mesh files format
+    // Check mesh files format (supports .gz)
     try {
-      final pointsFile = File('$casePath/constant/polyMesh/points');
-      if (await pointsFile.exists()) {
-        final bytes = await pointsFile.readAsBytes();
+      final pointsPath = '$casePath/constant/polyMesh/points';
+      if (await FileUtils.fileExists(pointsPath)) {
+        final bytes = await FileUtils.readFileBytes(pointsPath);
         final header = FoamFileParser.parseFoamFileHeaderFromBytes(bytes);
         formats['mesh'] = header['format'] ?? 'unknown';
       }
@@ -96,33 +96,28 @@ class CaseReader {
     String casePath,
     String timeDir,
   ) async {
-    final fields = <String>[];
-    final timeDirectory = Directory('$casePath/$timeDir');
+    // Use FileUtils to get all files (handles .gz automatically)
+    final fields = await FileUtils.listFiles('$casePath/$timeDir');
+    final validFields = <String>[];
 
-    if (!await timeDirectory.exists()) {
-      return fields;
-    }
+    for (final name in fields) {
+      // Skip uniform directory and other non-field files
+      if (name == 'uniform' || name.startsWith('.')) continue;
 
-    await for (final entity in timeDirectory.list()) {
-      if (entity is File) {
-        final name = entity.path.split(Platform.pathSeparator).last;
-        // Skip uniform directory and other non-field files
-        if (name != 'uniform' && !name.startsWith('.')) {
-          // Check if it's a valid OpenFOAM field file
-          try {
-            final content = await entity.readAsString(encoding: utf8);
-            if (content.contains('FoamFile')) {
-              fields.add(name);
-            }
-          } catch (e) {
-            // Skip files that can't be read
-          }
+      // Check if it's a valid OpenFOAM field file
+      try {
+        final content = await FileUtils.readFileAsString('$casePath/$timeDir/$name');
+        if (content.contains('FoamFile')) {
+          validFields.add(name);
         }
+      } catch (e) {
+        // Skip files that can't be read
+        print('Skipping $name: $e');
       }
     }
 
-    fields.sort();
-    return fields;
+    validFields.sort();
+    return validFields;
   }
 
   // Load scalar field data from a time directory
@@ -132,15 +127,15 @@ class CaseReader {
     String fieldName,
     PolyMesh mesh,
   ) async {
-    final fieldFile = File('$casePath/$timeDir/$fieldName');
+    final fieldPath = '$casePath/$timeDir/$fieldName';
 
-    if (!await fieldFile.exists()) {
-      print('Field file not found: ${fieldFile.path}');
+    if (!await FileUtils.fileExists(fieldPath)) {
+      print('Field file not found: $fieldPath (also tried .gz)');
       return null;
     }
 
     try {
-      final content = await fieldFile.readAsString();
+      final content = await FileUtils.readFileAsString(fieldPath);
 
       // Parse the field header to check field type
       final header = FoamFileParser.parseFoamFileHeader(content);
